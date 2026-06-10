@@ -1,6 +1,10 @@
-# Running Pacing Strategy Calculator
+# Pace Builder
 
-A Python script that reads GPX files and generates an intelligent pacing strategy for running based on terrain elevation and gradient.
+A Python script and web app that reads GPX files and generates an intelligent pacing strategy for running based on terrain elevation and gradient.
+
+## 🌐 Try Online
+
+**No installation needed!** Use the web interface: [Pace Builder Web App](https://jstringara.github.io/pace-builder/)
 
 ## Features
 
@@ -9,9 +13,16 @@ A Python script that reads GPX files and generates an intelligent pacing strateg
 - 🏔️ Adjusts pace based on grade/steepness
 - ⏱️ Provides detailed pacing breakdown with 1km granularity
 - 📊 Generates summary with total distance, time, and elevation gain
+- 🌐 Web interface (no installation required)
+- 🐍 CLI tool for advanced users
 
 ## Requirements
 
+### For Web App
+- Modern web browser (Chrome, Firefox, Safari, Edge)
+- No installation required!
+
+### For CLI Script
 - Python 3.9+
 - `uv` package manager (https://github.com/astral-sh/uv)
 
