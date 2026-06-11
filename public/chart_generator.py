@@ -124,9 +124,22 @@ def generate_elevation_pace_profile_chart(segments, points, haversine_distance):
     # Create right y-axis for pace
     ax2 = ax1.twinx()
     adjusted_paces = [seg.adjusted_pace_sec / 60 for seg in segments]
-    # Plot pace at segment positions
-    ax2.plot(cumulative_distances[:-1], adjusted_paces, marker='o', linewidth=2.5, markersize=8, 
-             color='#f59e0b', label='Adjusted Pace', zorder=4, alpha=0.9)
+    base_pace_min = segments[0].base_pace_sec / 60 if segments else 5.5
+    
+    # Calculate bar positions and widths
+    bar_positions = cumulative_distances[:-1]  # Start positions of bars
+    bar_widths = [cumulative_distances[i+1] - cumulative_distances[i] for i in range(len(segments))]
+    
+    # Calculate pace deviation from base pace (positive = faster, negative = slower)
+    pace_deviations = [base_pace_min - pace for pace in adjusted_paces]
+    
+    # Plot pace as bar chart with bars inverted (faster above the base line, slower below)
+    ax2.bar(bar_positions, pace_deviations, width=bar_widths, bottom=base_pace_min,
+            color='#f59e0b', label='Adjusted Pace', alpha=0.6, edgecolor='#d97706', linewidth=1.5, zorder=4, align='edge')
+    
+    # Add horizontal dotted line for base pace
+    ax2.axhline(y=base_pace_min, color='#666666', linestyle='--', linewidth=2, label='Base Pace', zorder=3)
+    
     ax2.set_ylabel('Pace (min/km)', fontsize=12, fontweight='bold', color='#f59e0b')
     ax2.tick_params(axis='y', labelcolor='#f59e0b')
 

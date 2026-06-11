@@ -34,8 +34,31 @@ function ResultsDisplay({ results }) {
   return (
     <div className="results-display">
       <div className="card border-0 shadow-sm">
-        <div className="card-header bg-light border-bottom">
-          <h3 className="mb-0">📊 Your Pacing Strategy</h3>
+        <div className="card-header bg-light border-bottom d-flex flex-column">
+          <h3 className="mb-3">📊 Your Pacing Strategy</h3>
+          {/* Tabs for Table and Charts */}
+          <ul className="nav nav-tabs" role="tablist">
+            <li className="nav-item" role="presentation">
+              <button
+                className={`nav-link ${activeTab === 'table' ? 'active' : ''}`}
+                id="table-tab"
+                onClick={() => setActiveTab('table')}
+                role="tab"
+              >
+                <span className="icon-label">📋</span> Segments Table
+              </button>
+            </li>
+            <li className="nav-item" role="presentation">
+              <button
+                className={`nav-link ${activeTab === 'charts' ? 'active' : ''}`}
+                id="charts-tab"
+                onClick={() => setActiveTab('charts')}
+                role="tab"
+              >
+                <span className="icon-label">📈</span> Charts & Graphs
+              </button>
+            </li>
+          </ul>
         </div>
 
         {/* Summary Stats */}
@@ -47,30 +70,6 @@ function ResultsDisplay({ results }) {
             avgPace={avgPacePerKm}
           />
         </div>
-
-        {/* Tabs for Table and Charts */}
-        <ul className="nav nav-tabs card-header-tabs" role="tablist">
-          <li className="nav-item" role="presentation">
-            <button
-              className={`nav-link ${activeTab === 'table' ? 'active' : ''}`}
-              id="table-tab"
-              onClick={() => setActiveTab('table')}
-              role="tab"
-            >
-              📋 Segments Table
-            </button>
-          </li>
-          <li className="nav-item" role="presentation">
-            <button
-              className={`nav-link ${activeTab === 'charts' ? 'active' : ''}`}
-              id="charts-tab"
-              onClick={() => setActiveTab('charts')}
-              role="tab"
-            >
-              📈 Charts & Graphs
-            </button>
-          </li>
-        </ul>
 
         <div className="card-body">
           {activeTab === 'table' && (
