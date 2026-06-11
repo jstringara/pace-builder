@@ -59,6 +59,28 @@ def parse_gpx(file_path: str) -> List[TrackPoint]:
     return points
 
 
+def parse_gpx_string(gpx_content: str) -> List[TrackPoint]:
+    """Parse GPX content from a string and extract track points."""
+    root = ET.fromstring(gpx_content)
+    # Handle namespace
+    ns = {'gpx': 'http://www.topografix.com/GPX/1/1'}
+
+    points = []
+    for trkpt in root.findall('.//gpx:trkpt', ns):
+        lat = float(trkpt.get('lat'))
+        lon = float(trkpt.get('lon'))
+
+        ele_elem = trkpt.find('gpx:ele', ns)
+        time_elem = trkpt.find('gpx:time', ns)
+
+        ele = float(ele_elem.text) if ele_elem is not None else 0
+        time = time_elem.text if time_elem is not None else ""
+
+        points.append(TrackPoint(lat=lat, lon=lon, ele=ele, time=time))
+
+    return points
+
+
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate distance between two coordinates in meters.
@@ -83,12 +105,24 @@ def calculate_segments(
     alpha_down: float = 5.0,
     min_pace_frac: float = 0.5,
     max_pace_mult: float = 3.0,
-) -> Tuple[List[SegmentStats], float]:
+    negative_split: bool = False,
+    negative_split_delta: float = 30.0,
+) -> Tuple[List[SegmentStats], float, bool]:
     """
     Calculate 1km segments with adjusted pacing based on gradient.
     
+    Args:
+        points: List of track points from GPX file
+        base_pace_str: Base pace in mm:ss format
+        alpha_up: Seconds added per 1% uphill grade
+        alpha_down: Seconds added per 1% downhill grade
+        min_pace_frac: Minimum pace as fraction of base pace
+        max_pace_mult: Maximum pace as multiple of base pace
+        negative_split: If True, use negative split strategy
+        negative_split_delta: Seconds to slow down first half / speed up second half
+    
     Returns:
-        Tuple of (segments list, total distance in km)
+        Tuple of (segments list, total distance in km, is_negative_split_active)
     """
     # Parse base pace from mm:ss format
     pace_parts = base_pace_str.split(':')
@@ -219,7 +253,49 @@ def calculate_segments(
         # segment time scales with actual segment distance
         seg.segment_time_sec = int(round(adjusted_pace_per_km * (seg.distance_m / 1000.0)))
 
-    return segments, total_distance_km
+    # Apply negative split strategy if enabled
+    is_negative_split = False
+    if negative_split and len(segments) > 1:
+        # Find the transition point based on cumulative elevation gain
+        # The idea: place transition after the major climbs so you conserve energy early
+        total_elev_gain = sum(seg.elevation_gain_m for seg in segments)
+        cumulative_elev = 0.0
+        transition_idx = len(segments) // 2  # default to halfway by segment count
+        
+        # Find the segment after which we've completed ~60% of elevation gain
+        # This allows us to tackle the hills early at a sustainable pace
+        for i, seg in enumerate(segments):
+            cumulative_elev += seg.elevation_gain_m
+            if cumulative_elev >= total_elev_gain * 0.6:
+                transition_idx = i
+                break
+        
+        # Apply negative split adjustments
+        for i, seg in enumerate(segments):
+            if i < transition_idx:
+                # First half: slow down by negative_split_delta seconds per km
+                seg.adjusted_pace_sec = min(
+                    int(seg.adjusted_pace_sec + negative_split_delta),
+                    int(seg.base_pace_sec * max_pace_mult)
+                )
+            else:
+                # Second half: speed up by negative_split_delta seconds per km
+                seg.adjusted_pace_sec = max(
+                    int(seg.adjusted_pace_sec - negative_split_delta),
+                    max(int(seg.base_pace_sec * min_pace_frac), 120)
+                )
+            
+            # Update string representation
+            minutes = seg.adjusted_pace_sec // 60
+            seconds = seg.adjusted_pace_sec % 60
+            seg.adjusted_pace_str = f"{minutes}:{seconds:02d}"
+            
+            # Recalculate segment time with new pace
+            seg.segment_time_sec = int(round(seg.adjusted_pace_sec * (seg.distance_m / 1000.0)))
+        
+        is_negative_split = True
+
+    return segments, total_distance_km, is_negative_split
 
 
 def format_time(seconds: int) -> str:
@@ -230,10 +306,13 @@ def format_time(seconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def print_pacing_strategy(segments: List[SegmentStats], total_distance_km: float, base_pace_str: str):
+def print_pacing_strategy(segments: List[SegmentStats], total_distance_km: float, base_pace_str: str, is_negative_split: bool = False):
     """Print the pacing strategy in a nice table format."""
     print("\n" + "=" * 100)
-    print("PACING STRATEGY FOR YOUR RUN".center(100))
+    strategy_title = "PACING STRATEGY FOR YOUR RUN"
+    if is_negative_split:
+        strategy_title += " (NEGATIVE SPLIT)"
+    print(strategy_title.center(100))
     print("=" * 100)
     
     print(f"\nBase pace: {base_pace_str}/km")
@@ -351,6 +430,17 @@ def main():
         help='Path to CSV output file to write per-km splits',
         default=None,
     )
+    parser.add_argument(
+        '--negative-split',
+        action='store_true',
+        help='Use negative split strategy: start slower, finish faster'
+    )
+    parser.add_argument(
+        '--negative-split-pace',
+        type=float,
+        default=30.0,
+        help='Seconds to slow down first half / speed up second half (default: 30)'
+    )
     
     args = parser.parse_args()
     
@@ -380,17 +470,19 @@ def main():
         return
     
     # Calculate segments and pacing
-    segments, total_distance_km = calculate_segments(
+    segments, total_distance_km, is_negative_split = calculate_segments(
         points,
         args.pace,
         alpha_up=args.alpha_up,
         alpha_down=args.alpha_down,
         min_pace_frac=args.min_pct,
         max_pace_mult=args.max_mult,
+        negative_split=args.negative_split,
+        negative_split_delta=args.negative_split_pace,
     )
     
     # Display results
-    print_pacing_strategy(segments, total_distance_km, args.pace)
+    print_pacing_strategy(segments, total_distance_km, args.pace, is_negative_split)
     if args.csv:
         export_csv(segments, total_distance_km, args.csv)
 

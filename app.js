@@ -5,8 +5,8 @@ async function initPyodide() {
     pyodide = await loadPyodide();
     await pyodide.loadPackage("micropip");
     
-    // Load the pacing_strategy module
-    const response = await fetch('pacing_strategy.py');
+    // Load the pacing_strategy module (root script)
+    const response = await fetch('../pacing_strategy.py');
     const pacingScript = await response.text();
     pyodide.runPython(pacingScript);
     
@@ -41,6 +41,48 @@ document.getElementById('maxMult').addEventListener('input', function() {
     document.getElementById('maxMultValue').textContent = (this.value) + '×';
 });
 
+document.getElementById('negativeSplitToggle').addEventListener('change', function() {
+    const container = document.getElementById('negativeSplitDeltaContainer');
+    container.style.display = this.checked ? 'block' : 'none';
+});
+
+document.getElementById('negativeSplitDelta').addEventListener('input', function() {
+    document.getElementById('negativeSplitDeltaValue').textContent = this.value;
+});
+
+// Presets (from README)
+const PRESETS = {
+    'default': { alphaUp: 10.0, alphaDown: 5.0, minPct: 50, maxMult: 3.0 },
+    'race':    { alphaUp: 15.0, alphaDown: 3.0,  minPct: 50, maxMult: 2.5 },
+    'training':{ alphaUp: 8.0,  alphaDown: 6.0,  minPct: 60, maxMult: 1.8 },
+    'very_hilly':{ alphaUp: 18.0, alphaDown: 8.0, minPct: 50, maxMult: 3.5 },
+    'rolling': { alphaUp: 10.0, alphaDown: 5.0,  minPct: 50, maxMult: 3.0 },
+    'ultra':   { alphaUp: 12.0, alphaDown: 4.0,  minPct: 70, maxMult: 2.0 }
+};
+
+function applyPreset(key) {
+    const p = PRESETS[key] || PRESETS['default'];
+    document.getElementById('alphaUp').value = p.alphaUp;
+    document.getElementById('alphaDown').value = p.alphaDown;
+    document.getElementById('minPct').value = p.minPct;
+    document.getElementById('maxMult').value = p.maxMult;
+    // Update displayed values
+    document.getElementById('alphaUpValue').textContent = p.alphaUp;
+    document.getElementById('alphaDownValue').textContent = p.alphaDown;
+    document.getElementById('minPctValue').textContent = p.minPct + '%';
+    document.getElementById('maxMultValue').textContent = p.maxMult + '×';
+}
+
+// If preset selector exists, wire it
+const presetSelect = document.getElementById('presetSelect');
+if (presetSelect) {
+    presetSelect.addEventListener('change', function() {
+        applyPreset(this.value);
+    });
+    // Apply initial preset to sync UI badges with slider defaults
+    applyPreset(presetSelect.value);
+}
+
 // Handle form submission
 document.getElementById('pacingForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -61,6 +103,8 @@ document.getElementById('pacingForm').addEventListener('submit', async function(
     const alphaDown = parseFloat(document.getElementById('alphaDown').value);
     const minPct = parseFloat(document.getElementById('minPct').value) / 100;
     const maxMult = parseFloat(document.getElementById('maxMult').value);
+    const negativeSplit = document.getElementById('negativeSplitToggle').checked;
+    const negativeSplitDelta = parseFloat(document.getElementById('negativeSplitDelta').value);
     
     setLoading(true);
     
@@ -68,27 +112,31 @@ document.getElementById('pacingForm').addEventListener('submit', async function(
         // Read GPX file content
         const gpxContent = await gpxFile.text();
         
+        // Store values in Pyodide globals first, then use them
+        pyodide.globals.set('gpx_content', gpxContent);
+        pyodide.globals.set('base_pace', basePace);
+        pyodide.globals.set('alpha_up', alphaUp);
+        pyodide.globals.set('alpha_down', alphaDown);
+        pyodide.globals.set('min_pace_frac', minPct);
+        pyodide.globals.set('max_pace_mult', maxMult);
+        pyodide.globals.set('negative_split', negativeSplit);
+        pyodide.globals.set('negative_split_delta', negativeSplitDelta);
+        
         // Run Python calculation
         const result = await pyodide.runPythonAsync(`
 import json
-from io import StringIO
-
-# Parse GPX content
-gpx_content = """${gpxContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"""
-
-# Create temp file-like object
-from xml.etree import ElementTree as ET
-root = ET.fromstring(gpx_content)
 
 # Use the functions from pacing_strategy
 points = parse_gpx_string(gpx_content)
-segments, total_distance_km = calculate_segments(
+segments, total_distance_km, is_negative_split = calculate_segments(
     points,
-    "${basePace}",
-    alpha_up=${alphaUp},
-    alpha_down=${alphaDown},
-    min_pace_frac=${minPct},
-    max_pace_mult=${maxMult},
+    base_pace,
+    alpha_up=alpha_up,
+    alpha_down=alpha_down,
+    min_pace_frac=min_pace_frac,
+    max_pace_mult=max_pace_mult,
+    negative_split=negative_split,
+    negative_split_delta=negative_split_delta,
 )
 
 # Convert results to JSON

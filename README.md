@@ -15,6 +15,7 @@ A Python script and web app that reads GPX files and generates an intelligent pa
 - 📊 Generates summary with total distance, time, and elevation gain
 - 🌐 Web interface (no installation required)
 - 🐍 CLI tool for advanced users
+- 🏃 **Negative split strategy**: Run faster in the second half, conserving energy on early climbs
 
 ## Requirements
 
@@ -32,11 +33,25 @@ The environment is managed with `uv`. Dependencies are minimal (only Python stan
 
 ## Usage
 
+### Web App
+
+Simply open the webapp in your browser and:
+1. **Upload a GPX file** or click "Use Sample" to load the example
+2. **Set your target pace** (e.g., 5:30/km)
+3. **Configure advanced parameters** (optional):
+   - Adjust uphill/downhill sensitivity
+   - Set pace limits (min/max)
+   - **Enable negative split strategy** to run faster in the second half
+4. **Click "Calculate Pacing Strategy"** to generate your splits
+5. **Download as CSV** to view or export your pacing plan
+
+### CLI Script
+
 ```bash
 uv run pacing_strategy.py <gpx_file> <pace>
 ```
 
-### Parameters
+#### Parameters
 
 - `<gpx_file>`: Path to your GPX file (e.g., `sangiovanni.gpx`)
 - `<pace>`: Target pace in `mm:ss` format (e.g., `5:30` for 5 minutes 30 seconds per kilometer)
@@ -47,11 +62,19 @@ uv run pacing_strategy.py <gpx_file> <pace>
 - `--alpha-down`: Seconds saved per 1% downhill grade (default `5.0`).
 - `--min-pct`: Minimum pace as a fraction of base pace (default `0.5`).
 - `--max-mult`: Maximum pace as a multiple of base pace (default `3.0`).
+- `--negative-split`: Enable negative split strategy (run second half faster).
+- `--negative-split-delta`: Pace adjustment for negative split in seconds/km (default `30.0`).
 
 Example with tuning:
 
 ```bash
 uv run pacing_strategy.py sangiovanni.gpx 5:30 --alpha-up 12 --alpha-down 6 --min-pct 0.6 --max-mult 2.5
+```
+
+Example with negative split strategy:
+
+```bash
+uv run pacing_strategy.py sangiovanni.gpx 5:30 --negative-split --negative-split-delta 30
 ```
 
 ### Example
@@ -114,6 +137,31 @@ The script produces:
    - Total elevation gain
    - Total running time
    - Average adjusted pace
+
+## Negative Split Strategy
+
+**What is a negative split?** Running the second half of a race faster than the first half.
+
+**How does it work?** 
+- The script identifies where approximately 60% of your elevation gain occurs
+- It slows you down before that point (conserving energy for climbs)
+- It speeds you up after that point (allowing faster running on easier terrain)
+- The `--negative-split-delta` parameter controls how much to adjust: 30 seconds/km means -30 sec/km in the first half, +30 sec/km in the second half
+
+**When to use it?**
+- **Hilly/mountainous courses**: Save energy early for the climbs
+- **Trail running**: Sustainable pacing on technical terrain
+- **Long races**: Proven strategy for consistent effort distribution
+- **Training runs**: Practice running "the back half harder"
+
+**Example:**
+```bash
+# Negative split with 25 sec/km adjustment (conservative)
+uv run pacing_strategy.py sangiovanni.gpx 5:30 --negative-split --negative-split-delta 25
+
+# Negative split with 40 sec/km adjustment (aggressive)
+uv run pacing_strategy.py sangiovanni.gpx 5:30 --negative-split --negative-split-delta 40
+```
 
 ## How It Works
 
