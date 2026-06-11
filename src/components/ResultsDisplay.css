@@ -1,0 +1,29 @@
+.results-display {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nav-tabs .nav-link {
+    color: #64748b;
+    border-bottom: 3px solid transparent;
+}
+
+.nav-tabs .nav-link.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background-color: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #2563eb;
+}

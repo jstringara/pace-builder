@@ -3,7 +3,9 @@ name = "pacing-strategy"
 version = "0.1.0"
 description = "Calculate pacing strategy for running based on GPX file elevation data"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.5.0",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,27 @@
+.pacing-form-container {
+    position: sticky;
+    top: 20px;
+}
+
+.advanced-section {
+    border-left: 4px solid #2563eb !important;
+}
+
+.parameter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+    .pacing-form-container {
+        position: relative;
+        top: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .parameter-grid {
+        grid-template-columns: 1fr;
+    }
+}

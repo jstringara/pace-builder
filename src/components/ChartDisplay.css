@@ -1,0 +1,36 @@
+.charts-container {
+    margin-top: 2rem;
+}
+
+.chart-item {
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.chart-wrapper {
+    position: relative;
+    background: white;
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+.chart-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+    .chart-item {
+        padding: 1rem;
+    }
+
+    .chart-image {
+        max-width: 100%;
+        width: 100%;
+    }
+}
