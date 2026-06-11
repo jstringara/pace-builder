@@ -10,12 +10,29 @@ function App() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    initPyodide()
+    // Wait for Pyodide to be available globally
+    const initPyodideWhenReady = async () => {
+      // Poll until loadPyodide is available (up to 30 seconds)
+      let attempts = 0
+      while (!window.loadPyodide && attempts < 60) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        attempts++
+      }
+      
+      if (!window.loadPyodide) {
+        setError('Failed to load Pyodide. Please refresh the page.')
+        return
+      }
+      
+      initPyodide()
+    }
+    
+    initPyodideWhenReady()
   }, [])
 
   const initPyodide = async () => {
     try {
-      const pyodideModule = await loadPyodide()
+      const pyodideModule = await window.loadPyodide()
       await pyodideModule.loadPackage('micropip')
       
       // Load matplotlib for graph generation

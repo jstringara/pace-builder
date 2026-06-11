@@ -33,12 +33,22 @@ function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
 
   const loadSampleGpx = async () => {
     try {
-      const response = await fetch(import.meta.env.BASE_URL + 'sangiovanni.gpx')
+      const basePath = import.meta.env.BASE_URL
+      const gpxPath = basePath + 'sangiovanni.gpx'
+      console.log('Loading GPX from:', gpxPath)
+      
+      const response = await fetch(gpxPath)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
       const blob = await response.blob()
       const file = new File([blob], 'sangiovanni.gpx', { type: 'application/gpx+xml' })
       setGpxFile(file)
+      console.log('✓ Sample GPX loaded successfully')
     } catch (err) {
       console.error('Error loading sample GPX:', err)
+      alert('Failed to load sample GPX file: ' + err.message)
     }
   }
 
@@ -92,18 +102,34 @@ function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
                   id="gpxFile"
                   accept=".gpx"
                   onChange={(e) => setGpxFile(e.target.files?.[0] || null)}
+                  style={{ display: gpxFile ? 'none' : 'block' }}
                 />
+                {gpxFile && (
+                  <div className="form-control bg-light d-flex align-items-center" style={{ cursor: 'pointer' }}>
+                    <span>✓ {gpxFile.name}</span>
+                  </div>
+                )}
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
                   onClick={loadSampleGpx}
                   title="Load the sample sangiovanni.gpx file"
                 >
-                  Use Sample
+                  {gpxFile ? 'Change' : 'Use Sample'}
                 </button>
+                {gpxFile && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger"
+                    onClick={() => setGpxFile(null)}
+                    title="Clear the selected file"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
               <small className="form-text text-muted d-block mt-2">
-                📍 {gpxFile ? `Loaded: ${gpxFile.name}` : 'Upload your GPX track file'}
+                📍 {gpxFile ? `Selected: ${gpxFile.name}` : 'Upload your GPX track file or click "Use Sample"'}
               </small>
             </div>
 

@@ -87,7 +87,7 @@ npm run build && npm run preview
 |------------|-----|
 | **Local Dev** | `http://localhost:3000` |
 | **Local Preview** | `http://localhost:4173` |
-| **Production** | `https://yourusername.github.io/san_giovanni/` |
+| **Production** | `https://jstringara.github.io/pace-builder/` |
 
 ## 🔑 Key npm Scripts
 

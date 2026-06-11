@@ -56,26 +56,35 @@ This creates an optimized build in the `dist/` folder.
 npm run preview
 ```
 
-## 📦 Deployment to GitHub Pages
+## 🌐 Deployment to GitHub Pages
 
-### Automatic Deployment (Recommended)
+### Setup (One Time)
 
-1. Make sure you have `gh-pages` in devDependencies (it's already there):
+1. **Enable GitHub Pages** in your repository:
+   - Go to Settings → Pages
+   - Source: Select "GitHub Actions" 
+   - Save
+
+2. **Verify base path** in `vite.config.js`:
+   ```javascript
+   base: '/pace-builder/'
+   ```
+
+### Deploy (Automatic)
+
 ```bash
-npm run deploy
+git add .
+git commit -m "Deploy to GitHub Pages"
+git push origin main
+# GitHub Actions automatically builds and deploys!
 ```
 
-This will:
-- Build the project
-- Push to the `gh-pages` branch automatically
-- Your site will be live at `https://yourusername.github.io/san_giovanni/`
+### Your Site Will Be Live At
+```
+https://jstringara.github.io/pace-builder/
+```
 
-### Manual Deployment
-
-1. Build: `npm run build`
-2. In GitHub repository settings, enable GitHub Pages
-3. Select `gh-pages` branch as the source
-4. Wait a few moments for the site to build and deploy
+Watch the deployment in your Actions tab (~2-3 minutes).
 
 ## 📁 Project Structure
 

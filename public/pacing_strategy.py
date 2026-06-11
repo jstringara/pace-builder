@@ -487,5 +487,6 @@ def main():
         export_csv(segments, total_distance_km, args.csv)
 
 
-if __name__ == '__main__':
-    main()
+# Only run main if executed directly from command line (not when loaded in Pyodide)
+# if __name__ == '__main__':
+#     main()
