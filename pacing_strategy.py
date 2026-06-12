@@ -22,6 +22,16 @@ class TrackPoint:
 
 
 @dataclass
+class MicroSector:
+    """A point-to-point segment with raw and normalized effort."""
+    distance_m: float
+    elevation_diff_m: float
+    grade: float  # gradient as fraction (e.g., 0.05 for 5%)
+    raw_time_sec: float  # time before normalization
+    final_time_sec: float  # time after normalization
+
+
+@dataclass
 class SegmentStats:
     """Statistics for a 1km segment."""
     segment_num: int
@@ -101,201 +111,153 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 def calculate_segments(
     points: List[TrackPoint],
     base_pace_str: str,
-    alpha_up: float = 10.0,
-    alpha_down: float = 5.0,
+    c1: float = 1.5,
+    c2: float = 6.5,
+    split_variance: float = 0.05,
     min_pace_frac: float = 0.5,
     max_pace_mult: float = 3.0,
-    negative_split: bool = False,
-    negative_split_delta: float = 30.0,
-) -> Tuple[List[SegmentStats], float, bool]:
+) -> Tuple[List[SegmentStats], float]:
     """
-    Calculate 1km segments with adjusted pacing based on gradient.
+    Calculate 1km segments using micro-sector architecture with 4-pass algorithm.
     
     Args:
         points: List of track points from GPX file
         base_pace_str: Base pace in mm:ss format
-        alpha_up: Seconds added per 1% uphill grade
-        alpha_down: Seconds added per 1% downhill grade
+        c1: Effort coefficient for linear grade term (default: 1.5)
+        c2: Effort coefficient for quadratic grade term (default: 6.5)
+        split_variance: Strategy multiplier variance for negative/positive split (default: 0.05)
         min_pace_frac: Minimum pace as fraction of base pace
         max_pace_mult: Maximum pace as multiple of base pace
-        negative_split: If True, use negative split strategy
-        negative_split_delta: Seconds to slow down first half / speed up second half
     
     Returns:
-        Tuple of (segments list, total distance in km, is_negative_split_active)
+        Tuple of (segments list, total distance in km)
     """
     # Parse base pace from mm:ss format
     pace_parts = base_pace_str.split(':')
     base_pace_sec = int(pace_parts[0]) * 60 + int(pace_parts[1])
-
-    segments = []
-    current_distance = 0
-    current_segment_num = 1
-    segment_start_idx = 0
-
-    i = 1
-    while i < len(points):
+    
+    # === PASS 1: Prep ===
+    # Calculate total distance and create micro-sectors
+    micro_sectors = []
+    total_distance_m = 0.0
+    
+    for i in range(1, len(points)):
         prev_point = points[i - 1]
         curr_point = points[i]
-
-        # Calculate distance for this track leg
-        dist = haversine_distance(
+        
+        # Calculate distance for this point-to-point segment
+        dist_m = haversine_distance(
             prev_point.lat, prev_point.lon,
             curr_point.lat, curr_point.lon
         )
-        current_distance += dist
-
-        # Check if we've accumulated ~1km (or final smaller segment)
-        if current_distance >= 1000:
-            segment_points = points[segment_start_idx:i + 1]
-
-            elevation_gain = 0
-            elevation_loss = 0
-            for j in range(1, len(segment_points)):
-                ele_diff = segment_points[j].ele - segment_points[j - 1].ele
-                if ele_diff > 0:
-                    elevation_gain += ele_diff
-                else:
-                    elevation_loss += abs(ele_diff)
-
-            # Signed grade based on net elevation change across the segment
-            net_elev = segment_points[-1].ele - segment_points[0].ele
-            grade_signed = (net_elev / current_distance) * 100 if current_distance > 0 else 0
-
+        
+        # Calculate elevation difference
+        elev_diff = curr_point.ele - prev_point.ele
+        
+        # Calculate grade as fraction (e.g., 0.05 for 5% uphill)
+        grade = (elev_diff / dist_m) if dist_m > 0 else 0.0
+        
+        total_distance_m += dist_m
+        
+        micro_sectors.append(MicroSector(
+            distance_m=dist_m,
+            elevation_diff_m=elev_diff,
+            grade=grade,
+            raw_time_sec=0.0,
+            final_time_sec=0.0,
+        ))
+    
+    if not micro_sectors:
+        return [], 0.0
+    
+    # Target total time based on base pace
+    base_pace_sec_per_m = base_pace_sec / 1000.0  # seconds per meter
+    target_total_time_sec = total_distance_m * base_pace_sec_per_m
+    
+    # === PASS 2: Physics & Strategy ===
+    # Calculate raw time for each micro-sector with effort and strategy multipliers
+    cumulative_distance = 0.0
+    sum_raw_times = 0.0
+    
+    for sector in micro_sectors:
+        # Effort Multiplier: E(g) = 1 + (c1 * g) + (c2 * g^2)
+        # where g is grade as fraction
+        effort_mult = 1.0 + (c1 * sector.grade) + (c2 * sector.grade ** 2)
+        
+        # Strategy Multiplier: S(x) = 1 + (split_variance * (0.5 - fraction_of_race))
+        # This implements negative split: slower at start (when x < 0.5), faster at end
+        fraction_complete = cumulative_distance / total_distance_m if total_distance_m > 0 else 0.5
+        strategy_mult = 1.0 + (split_variance * (0.5 - fraction_complete))
+        
+        # Raw time: dist * base_pace_per_meter * effort * strategy
+        sector.raw_time_sec = sector.distance_m * base_pace_sec_per_m * effort_mult * strategy_mult
+        sum_raw_times += sector.raw_time_sec
+        
+        cumulative_distance += sector.distance_m
+    
+    # === PASS 3: Normalize ===
+    # Calculate normalization factor to hit exact target time
+    normalization_factor = target_total_time_sec / sum_raw_times if sum_raw_times > 0 else 1.0
+    
+    for sector in micro_sectors:
+        sector.final_time_sec = sector.raw_time_sec * normalization_factor
+    
+    # === PASS 4: Aggregate ===
+    # Group micro-sectors into 1km segments
+    segments = []
+    current_segment_num = 1
+    current_distance = 0.0
+    segment_start_idx = 0
+    
+    for i, sector in enumerate(micro_sectors):
+        current_distance += sector.distance_m
+        
+        # Check if we've accumulated ~1km or if this is the last sector
+        if current_distance >= 1000 or i == len(micro_sectors) - 1:
+            # Aggregate micro-sectors for this 1km segment
+            segment_sectors = micro_sectors[segment_start_idx:i+1]
+            
+            total_segment_distance = sum(s.distance_m for s in segment_sectors)
+            total_segment_elevation_gain = sum(max(0, s.elevation_diff_m) for s in segment_sectors)
+            total_segment_elevation_loss = sum(max(0, -s.elevation_diff_m) for s in segment_sectors)
+            total_segment_time = sum(s.final_time_sec for s in segment_sectors)
+            
+            # Average grade for this segment
+            net_elev = sum(s.elevation_diff_m for s in segment_sectors)
+            avg_grade = (net_elev / total_segment_distance * 100) if total_segment_distance > 0 else 0.0
+            
+            # Calculate adjusted pace (seconds per km)
+            adjusted_pace_sec_per_km = (total_segment_time / (total_segment_distance / 1000.0)) if total_segment_distance > 0 else base_pace_sec
+            
+            # Apply safety clamps
+            min_pace = max(int(base_pace_sec * min_pace_frac), 120)  # at least 2 minutes
+            max_pace = int(base_pace_sec * max_pace_mult)
+            adjusted_pace_sec_per_km = max(min_pace, min(max_pace, adjusted_pace_sec_per_km))
+            
+            minutes = int(adjusted_pace_sec_per_km) // 60
+            seconds = int(adjusted_pace_sec_per_km) % 60
+            adjusted_pace_str = f"{minutes}:{seconds:02d}"
+            
             segment = SegmentStats(
                 segment_num=current_segment_num,
-                distance_m=current_distance,
-                elevation_gain_m=elevation_gain,
-                elevation_loss_m=elevation_loss,
-                grade=grade_signed,
+                distance_m=total_segment_distance,
+                elevation_gain_m=total_segment_elevation_gain,
+                elevation_loss_m=total_segment_elevation_loss,
+                grade=avg_grade,
                 base_pace_sec=base_pace_sec,
-                adjusted_pace_sec=0,
-                adjusted_pace_str="",
-                segment_time_sec=0,
+                adjusted_pace_sec=int(round(adjusted_pace_sec_per_km)),
+                adjusted_pace_str=adjusted_pace_str,
+                segment_time_sec=int(round(total_segment_time)),
             )
             segments.append(segment)
-
+            
             # Reset for next segment
-            current_distance = 0
+            current_distance = 0.0
             current_segment_num += 1
-            segment_start_idx = i
-
-        i += 1
-
-    # Handle remaining distance if any
-    if current_distance > 0 and segment_start_idx < len(points) - 1:
-        segment_points = points[segment_start_idx:]
-
-        elevation_gain = 0
-        elevation_loss = 0
-        for j in range(1, len(segment_points)):
-            ele_diff = segment_points[j].ele - segment_points[j - 1].ele
-            if ele_diff > 0:
-                elevation_gain += ele_diff
-            else:
-                elevation_loss += abs(ele_diff)
-
-        net_elev = segment_points[-1].ele - segment_points[0].ele
-        grade_signed = (net_elev / current_distance) * 100 if current_distance > 0 else 0
-
-        segment = SegmentStats(
-            segment_num=current_segment_num,
-            distance_m=current_distance,
-            elevation_gain_m=elevation_gain,
-            elevation_loss_m=elevation_loss,
-            grade=grade_signed,
-            base_pace_sec=base_pace_sec,
-            adjusted_pace_sec=0,
-            adjusted_pace_str="",
-            segment_time_sec=0,
-        )
-        segments.append(segment)
-
-    # Total distance
-    total_distance_m = sum(seg.distance_m for seg in segments)
-    total_distance_km = total_distance_m / 1000 if total_distance_m > 0 else 0
-
-    # Create per-km adjustments based on signed grade
-    # alpha_up: seconds added per 1% uphill grade
-    # alpha_down: seconds added per 1% downhill grade (used to speed up; applied as negative)
-    # raw adjustments (seconds per km) before removing weighted mean
-    raw_adj_per_km = []
-    for seg in segments:
-        g = seg.grade
-        if g >= 0:
-            raw = alpha_up * g
-        else:
-            raw = -alpha_down * abs(g)
-        raw_adj_per_km.append(raw)
-
-    # weight by segment distance (in km) to compute weighted mean
-    segment_lengths_km = [seg.distance_m / 1000.0 for seg in segments]
-    weighted_mean = 0.0
-    if total_distance_km > 0:
-        weighted_mean = sum(a * l for a, l in zip(raw_adj_per_km, segment_lengths_km)) / total_distance_km
-
-    # final per-km adjustments with zero mean (weighted)
-    final_adj_per_km = [a - weighted_mean for a in raw_adj_per_km]
-
-    # Apply adjustments and compute final times
-    for seg, adj in zip(segments, final_adj_per_km):
-        adjusted_pace_per_km = seg.base_pace_sec + adj
-        # safety clamps: keep pace within reasonable bounds relative to base pace
-        min_pace = max(int(seg.base_pace_sec * min_pace_frac), 120)  # at least 2 minutes or fraction of base
-        max_pace = int(seg.base_pace_sec * max_pace_mult)
-        adjusted_pace_per_km = max(min_pace, min(max_pace, adjusted_pace_per_km))
-
-        seg.adjusted_pace_sec = int(round(adjusted_pace_per_km))
-        minutes = seg.adjusted_pace_sec // 60
-        seconds = seg.adjusted_pace_sec % 60
-        seg.adjusted_pace_str = f"{minutes}:{seconds:02d}"
-
-        # segment time scales with actual segment distance
-        seg.segment_time_sec = int(round(adjusted_pace_per_km * (seg.distance_m / 1000.0)))
-
-    # Apply negative split strategy if enabled
-    is_negative_split = False
-    if negative_split and len(segments) > 1:
-        # Find the transition point based on cumulative elevation gain
-        # The idea: place transition after the major climbs so you conserve energy early
-        total_elev_gain = sum(seg.elevation_gain_m for seg in segments)
-        cumulative_elev = 0.0
-        transition_idx = len(segments) // 2  # default to halfway by segment count
-        
-        # Find the segment after which we've completed ~60% of elevation gain
-        # This allows us to tackle the hills early at a sustainable pace
-        for i, seg in enumerate(segments):
-            cumulative_elev += seg.elevation_gain_m
-            if cumulative_elev >= total_elev_gain * 0.6:
-                transition_idx = i
-                break
-        
-        # Apply negative split adjustments
-        for i, seg in enumerate(segments):
-            if i < transition_idx:
-                # First half: slow down by negative_split_delta seconds per km
-                seg.adjusted_pace_sec = min(
-                    int(seg.adjusted_pace_sec + negative_split_delta),
-                    int(seg.base_pace_sec * max_pace_mult)
-                )
-            else:
-                # Second half: speed up by negative_split_delta seconds per km
-                seg.adjusted_pace_sec = max(
-                    int(seg.adjusted_pace_sec - negative_split_delta),
-                    max(int(seg.base_pace_sec * min_pace_frac), 120)
-                )
-            
-            # Update string representation
-            minutes = seg.adjusted_pace_sec // 60
-            seconds = seg.adjusted_pace_sec % 60
-            seg.adjusted_pace_str = f"{minutes}:{seconds:02d}"
-            
-            # Recalculate segment time with new pace
-            seg.segment_time_sec = int(round(seg.adjusted_pace_sec * (seg.distance_m / 1000.0)))
-        
-        is_negative_split = True
-
-    return segments, total_distance_km, is_negative_split
+            segment_start_idx = i + 1
+    
+    total_distance_km = total_distance_m / 1000.0 if total_distance_m > 0 else 0.0
+    return segments, total_distance_km
 
 
 def format_time(seconds: int) -> str:
@@ -306,12 +268,10 @@ def format_time(seconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def print_pacing_strategy(segments: List[SegmentStats], total_distance_km: float, base_pace_str: str, is_negative_split: bool = False):
+def print_pacing_strategy(segments: List[SegmentStats], total_distance_km: float, base_pace_str: str):
     """Print the pacing strategy in a nice table format."""
     print("\n" + "=" * 100)
     strategy_title = "PACING STRATEGY FOR YOUR RUN"
-    if is_negative_split:
-        strategy_title += " (NEGATIVE SPLIT)"
     print(strategy_title.center(100))
     print("=" * 100)
     
@@ -401,16 +361,22 @@ def main():
         help='Target pace in mm:ss/km format (e.g., 5:30)'
     )
     parser.add_argument(
-        '--alpha-up',
+        '--c1',
         type=float,
-        default=10.0,
-        help='Seconds added per 1%% uphill grade (default: 10)'
+        default=1.5,
+        help='Effort coefficient for linear grade term (default: 1.5)'
     )
     parser.add_argument(
-        '--alpha-down',
+        '--c2',
         type=float,
-        default=5.0,
-        help='Seconds saved per 1%% downhill grade (default: 5)'
+        default=6.5,
+        help='Effort coefficient for quadratic grade term (default: 6.5)'
+    )
+    parser.add_argument(
+        '--split-variance',
+        type=float,
+        default=0.05,
+        help='Strategy multiplier variance for negative/positive split (default: 0.05)'
     )
     parser.add_argument(
         '--min-pct',
@@ -429,17 +395,6 @@ def main():
         dest='csv',
         help='Path to CSV output file to write per-km splits',
         default=None,
-    )
-    parser.add_argument(
-        '--negative-split',
-        action='store_true',
-        help='Use negative split strategy: start slower, finish faster'
-    )
-    parser.add_argument(
-        '--negative-split-pace',
-        type=float,
-        default=30.0,
-        help='Seconds to slow down first half / speed up second half (default: 30)'
     )
     
     args = parser.parse_args()
@@ -470,19 +425,18 @@ def main():
         return
     
     # Calculate segments and pacing
-    segments, total_distance_km, is_negative_split = calculate_segments(
+    segments, total_distance_km = calculate_segments(
         points,
         args.pace,
-        alpha_up=args.alpha_up,
-        alpha_down=args.alpha_down,
+        c1=args.c1,
+        c2=args.c2,
+        split_variance=args.split_variance,
         min_pace_frac=args.min_pct,
         max_pace_mult=args.max_mult,
-        negative_split=args.negative_split,
-        negative_split_delta=args.negative_split_pace,
     )
     
     # Display results
-    print_pacing_strategy(segments, total_distance_km, args.pace, is_negative_split)
+    print_pacing_strategy(segments, total_distance_km, args.pace)
     if args.csv:
         export_csv(segments, total_distance_km, args.csv)
 

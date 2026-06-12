@@ -2,30 +2,30 @@ import React, { useState } from 'react'
 import './PacingForm.css'
 
 const PRESETS = {
-  default: { alphaUp: 10.0, alphaDown: 5.0, minPct: 50, maxMult: 3.0 },
-  race: { alphaUp: 15.0, alphaDown: 3.0, minPct: 50, maxMult: 2.5 },
-  training: { alphaUp: 8.0, alphaDown: 6.0, minPct: 60, maxMult: 1.8 },
-  very_hilly: { alphaUp: 18.0, alphaDown: 8.0, minPct: 50, maxMult: 3.5 },
-  rolling: { alphaUp: 10.0, alphaDown: 5.0, minPct: 50, maxMult: 3.0 },
-  ultra: { alphaUp: 12.0, alphaDown: 4.0, minPct: 70, maxMult: 2.0 },
+  default: { c1: 1.5, c2: 6.5, splitVariance: 0.05, minPct: 50, maxMult: 3.0 },
+  race: { c1: 2.0, c2: 8.0, splitVariance: 0.02, minPct: 50, maxMult: 2.5 },
+  training: { c1: 1.2, c2: 5.5, splitVariance: 0.08, minPct: 60, maxMult: 1.8 },
+  very_hilly: { c1: 2.2, c2: 9.0, splitVariance: 0.03, minPct: 50, maxMult: 3.5 },
+  rolling: { c1: 1.5, c2: 6.5, splitVariance: 0.05, minPct: 50, maxMult: 3.0 },
+  ultra: { c1: 1.8, c2: 7.0, splitVariance: 0.10, minPct: 70, maxMult: 2.0 },
 }
 
 function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
   const [gpxFile, setGpxFile] = useState(null)
   const [basePace, setBasePace] = useState('5:30')
-  const [alphaUp, setAlphaUp] = useState(10.0)
-  const [alphaDown, setAlphaDown] = useState(5.0)
+  const [c1, setC1] = useState(1.5)
+  const [c2, setC2] = useState(6.5)
+  const [splitVariance, setSplitVariance] = useState(0.05)
   const [minPct, setMinPct] = useState(50)
   const [maxMult, setMaxMult] = useState(3.0)
-  const [negativeSplit, setNegativeSplit] = useState(false)
-  const [negativeSplitDelta, setNegativeSplitDelta] = useState(30)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [preset, setPreset] = useState('default')
 
   const applyPreset = (presetKey) => {
     const p = PRESETS[presetKey]
-    setAlphaUp(p.alphaUp)
-    setAlphaDown(p.alphaDown)
+    setC1(p.c1)
+    setC2(p.c2)
+    setSplitVariance(p.splitVariance)
     setMinPct(p.minPct)
     setMaxMult(p.maxMult)
     setPreset(presetKey)
@@ -70,12 +70,11 @@ function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
       onSubmit({
         gpxContent,
         basePace,
-        alphaUp,
-        alphaDown,
+        c1,
+        c2,
+        splitVariance,
         minPct,
         maxMult,
-        negativeSplit,
-        negativeSplitDelta,
       })
     } catch (err) {
       console.error('Error reading GPX file:', err)
@@ -192,45 +191,66 @@ function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
 
                 {/* Parameters Grid */}
                 <div className="parameter-grid">
-                  {/* Alpha Up */}
+                  {/* C1 */}
                   <div>
-                    <label htmlFor="alphaUp" className="form-label">
-                      Uphill Penalty (sec/%)
-                      <span className="badge bg-secondary ms-2">{alphaUp.toFixed(1)}</span>
+                    <label htmlFor="c1" className="form-label">
+                      Effort Coefficient C1 (linear)
+                      <span className="badge bg-secondary ms-2">{c1.toFixed(2)}</span>
                     </label>
                     <input
                       type="range"
                       className="form-range"
-                      id="alphaUp"
-                      min="5"
-                      max="25"
-                      step="0.5"
-                      value={alphaUp}
-                      onChange={(e) => setAlphaUp(parseFloat(e.target.value))}
+                      id="c1"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={c1}
+                      onChange={(e) => setC1(parseFloat(e.target.value))}
                     />
                     <small className="form-text text-muted d-block mt-2">
-                      ⬆️ Seconds added per 1% uphill grade.
+                      📈 Linear effort multiplier for grade. Higher = steeper penalty.
                     </small>
                   </div>
 
-                  {/* Alpha Down */}
+                  {/* C2 */}
                   <div>
-                    <label htmlFor="alphaDown" className="form-label">
-                      Downhill Bonus (sec/%)
-                      <span className="badge bg-secondary ms-2">{alphaDown.toFixed(1)}</span>
+                    <label htmlFor="c2" className="form-label">
+                      Effort Coefficient C2 (quadratic)
+                      <span className="badge bg-secondary ms-2">{c2.toFixed(2)}</span>
                     </label>
                     <input
                       type="range"
                       className="form-range"
-                      id="alphaDown"
-                      min="2"
-                      max="12"
+                      id="c2"
+                      min="2.0"
+                      max="12.0"
                       step="0.5"
-                      value={alphaDown}
-                      onChange={(e) => setAlphaDown(parseFloat(e.target.value))}
+                      value={c2}
+                      onChange={(e) => setC2(parseFloat(e.target.value))}
                     />
                     <small className="form-text text-muted d-block mt-2">
-                      ⬇️ Seconds saved per 1% downhill grade.
+                      📊 Quadratic effort multiplier for grade. Amplifies steep sections.
+                    </small>
+                  </div>
+
+                  {/* Split Variance */}
+                  <div>
+                    <label htmlFor="splitVariance" className="form-label">
+                      Split Variance (strategy)
+                      <span className="badge bg-secondary ms-2">{(splitVariance * 100).toFixed(1)}%</span>
+                    </label>
+                    <input
+                      type="range"
+                      className="form-range"
+                      id="splitVariance"
+                      min="0.0"
+                      max="0.20"
+                      step="0.01"
+                      value={splitVariance}
+                      onChange={(e) => setSplitVariance(parseFloat(e.target.value))}
+                    />
+                    <small className="form-text text-muted d-block mt-2">
+                      ⚡ Negative split strategy: 0% = even pace, 5% = moderate split, 20% = aggressive split.
                     </small>
                   </div>
 
@@ -275,47 +295,6 @@ function PacingForm({ onSubmit, loading, error, onErrorDismiss }) {
                       🐇 Fastest allowed pace (safety ceiling).
                     </small>
                   </div>
-                </div>
-
-                {/* Negative Split Strategy */}
-                <div className="mt-4 pt-4 border-top">
-                  <div className="form-check form-switch mb-3">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="negativeSplitToggle"
-                      checked={negativeSplit}
-                      onChange={(e) => setNegativeSplit(e.target.checked)}
-                    />
-                    <label className="form-check-label fw-bold" htmlFor="negativeSplitToggle">
-                      🏃 Negative Split Strategy
-                    </label>
-                  </div>
-                  <small className="form-text text-muted d-block mb-3">
-                    Run the second half faster than the first half to conserve energy early.
-                  </small>
-
-                  {negativeSplit && (
-                    <div>
-                      <label htmlFor="negativeSplitDelta" className="form-label">
-                        Split Adjustment (sec/km)
-                        <span className="badge bg-secondary ms-2">{negativeSplitDelta}</span>
-                      </label>
-                      <input
-                        type="range"
-                        className="form-range"
-                        id="negativeSplitDelta"
-                        min="10"
-                        max="60"
-                        step="5"
-                        value={negativeSplitDelta}
-                        onChange={(e) => setNegativeSplitDelta(parseFloat(e.target.value))}
-                      />
-                      <small className="form-text text-muted d-block mt-2">
-                        ⚖️ How much to slow down first half / speed up second half.
-                      </small>
-                    </div>
-                  )}
                 </div>
               </div>
             )}

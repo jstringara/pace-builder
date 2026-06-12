@@ -73,35 +73,32 @@ function App() {
       const {
         gpxContent,
         basePace,
-        alphaUp,
-        alphaDown,
+        c1,
+        c2,
+        splitVariance,
         minPct,
         maxMult,
-        negativeSplit,
-        negativeSplitDelta,
       } = formData;
 
       // Set Python globals
       pyodide.globals.set("gpx_content", gpxContent);
       pyodide.globals.set("base_pace", basePace);
-      pyodide.globals.set("alpha_up", alphaUp);
-      pyodide.globals.set("alpha_down", alphaDown);
+      pyodide.globals.set("c1", c1);
+      pyodide.globals.set("c2", c2);
+      pyodide.globals.set("split_variance", splitVariance);
       pyodide.globals.set("min_pace_frac", minPct / 100);
       pyodide.globals.set("max_pace_mult", maxMult);
-      pyodide.globals.set("negative_split", negativeSplit);
-      pyodide.globals.set("negative_split_delta", negativeSplitDelta);
 
       // Run Python calculation
       const result = await pyodide.runPythonAsync(`
 calculate_pacing_strategy(
     gpx_content,
     base_pace,
-    alpha_up,
-    alpha_down,
+    c1,
+    c2,
+    split_variance,
     min_pace_frac,
-    max_pace_mult,
-    negative_split,
-    negative_split_delta
+    max_pace_mult
 )
       `);
 
