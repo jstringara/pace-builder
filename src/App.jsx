@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import PacingForm from "./components/PacingForm";
 import ResultsDisplay from "./components/ResultsDisplay";
+import AlgorithmInfo from "./components/AlgorithmInfo";
 import "./App.css";
 
 function App() {
@@ -121,6 +122,9 @@ calculate_pacing_strategy(
       </nav>
 
       <main className="container-lg py-5">
+        {/* Algorithm Info Section */}
+        <AlgorithmInfo />
+
         <div className="row">
           <div className="col-xl-4">
             <PacingForm

@@ -1,0 +1,153 @@
+.algorithm-info {
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  margin-bottom: 1.5rem;
+  background-color: #fff;
+  overflow: hidden;
+}
+
+.info-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  cursor: pointer;
+  user-select: none;
+}
+
+.info-header:hover {
+  background-color: #e9ecef;
+}
+
+.info-header .btn {
+  padding: 0.75rem 1rem;
+}
+
+.info-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #212529;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.2s;
+}
+
+.info-header:hover .info-title {
+  color: #0d6efd;
+}
+
+.info-content {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* Algorithm Steps */
+.algorithm-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.step {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem;
+  background-color: #fff;
+  border-left: 3px solid #0d6efd;
+  border-radius: 0.25rem;
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  background-color: #0d6efd;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.step-content strong {
+  color: #212529;
+  font-size: 0.95rem;
+}
+
+.step-content small {
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+/* Parameters Explained */
+.parameters-explained {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.param {
+  padding: 0.75rem;
+  background-color: #fff;
+  border-left: 3px solid #28a745;
+  border-radius: 0.25rem;
+}
+
+.param strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.param p {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.param code {
+  background-color: #f8f9fa;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  color: #d63384;
+  font-family: "Courier New", monospace;
+}
+
+.param small {
+  display: block;
+  margin-top: 0.5rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Example Section */
+.mt-4 ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.mt-4 li {
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.mt-4 strong {
+  color: #212529;
+}
+
+/* Info box at bottom */
+.bg-info {
+  background-color: #cfe2ff !important;
+}
+
+.bg-opacity-10 {
+  opacity: 0.1;
+}
